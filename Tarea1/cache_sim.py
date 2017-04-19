@@ -8,7 +8,7 @@ default_programcpu2 = "mem_trace_core2.txt"
 
 ###############################################################################
 """
-Represents a cache
+Represents cache Level 1
     
     +-----------+
     |   Line0   |
@@ -19,17 +19,53 @@ Represents a cache
     +-----------+
 
 """
-class Cache:
-    def __init__(n_lines, n_blocks_pl, tag_length, block_length):
+class CacheL1:
+    def __init__(n_lines, n_blocks_pl):
+        self.n_lines = n_lines
+        self.n_blocks_pl = n_blocks_pl        
+        self.lines = []
+        for n in range(n_lines):
+            self.lines += [LineLru(n_blocks_pl)]
+
+    def read_addr(address):
+        None
+
+    def write_addr(address):
+        None
+        
+###############################################################################
+
+
+###############################################################################
+"""
+Represents cache Level 2
+    
+    +-----------+
+    |   Line0   |
+    +-----------+
+    |   Line1   |
+    +-----------+
+    |   ...     |
+    +-----------+
+
+"""
+class CacheL2:
+    def __init__(n_lines, n_blocks_pl):
         self.n_lines = n_lines
         self.n_blocks_pl = n_blocks_pl        
         self.lines = []
         for n in range(n_lines):
             self.lines += [Line(n_blocks_pl)]
 
-###############################################################################
+    def read_addr(address):
+        None
 
+    def write_addr(address):
+        None
         
+###############################################################################       
+       
+       
 ###############################################################################
 """
 Represents a line in a cache, whether is a direct-mapped cache(n_blocks_pl=0)
@@ -39,7 +75,7 @@ or a n-way associative cache(n_blocks_pl=n)
     +----------+--------------+--------------+-----+
     
 """
-class Line:
+class LineLru:
     def __init__(n_blocks_pl):     
         self.n_lrubits=math.ceil(math.log(n_blocks_pl,2))     
         self.blocks = []
@@ -50,14 +86,33 @@ class Line:
 
 ###############################################################################
 """
-Represents a block
+Represents a line in a cache, whether is a direct-mapped cache(n_blocks_pl=0)
+or a n-way associative cache(n_blocks_pl=n)
+    +--------------+--------------+-----+ 
+    |    Block0    |    Block1    | ... |
+    +--------------+--------------+-----+
+
+The blocks include the tag and MESI bits
+"""
+class Line:
+    def __init__(n_blocks_pl):     
+        self.blocks = []
+        for n in range(n_blocks_pl):
+            self.blocks += [Block()]
+###############################################################################
+            
+            
+
+###############################################################################
+"""
+Represents a block and the associated MESI bits and tag
     +---+---+---+---+-------+----------+
     | M | E | S | I |  Tag  |   Data   |
     +---+---+---+---+-------+----------+
     
 """
 class Block:
-   def __init__():
+    def __init__():
         self.MESI = {'M':0, 'E':0, 'S':0, 'I':1}
         self.tag = ""
         self.data = "" # dummy variable
@@ -98,12 +153,20 @@ class CpuMaster:
                 cpu1_line = cpu1_file.readline()
                 if cpu1_line:
                     # process instruction
-                    
+                    print cpu1_line
+                    exit()                    
             
             cpu2_line = cpu2_file.readline()
             if cpu2_line:
                 # process instruction
-            
+                None
+                
+    def execute_cpu1(self):
+        None
+        
+    def execute_cpu2(self):
+        None        
+    
             
 ###############################################################################
 def main():
