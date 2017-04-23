@@ -39,45 +39,13 @@ class CacheL1:
         offset = address%2^5
         self.lines[index].read(tag)
         
+     def invalidate(self, address):
+         None
+         # TODO!!!
+         
 ###############################################################################
 
 
-###############################################################################
-"""
-Represents cache Level 2
-    
-    +-----------+
-    |   Line0   |
-    +-----------+
-    |   Line1   |
-    +-----------+
-    |   ...     |
-    +-----------+
-
-"""
-class CacheL2:
-    def __init__(self, n_lines, n_blocks_pl):
-        self.n_lines = n_lines
-        self.n_blocks_pl = n_blocks_pl        
-        self.lines = []
-        for n in range(n_lines):
-            self.lines += [Line(n_blocks_pl)]
-
-    def read_addr(self, address):
-        index = address/2^12
-        tag = (address%2^12)/2^5
-        offset = address%2^5
-        self.lines[index].read(tag)
-        
-    def write_addr(self, address):
-        index = address/2^12
-        tag = (address%2^12)/2^5
-        offset = address%2^5
-        self.lines[index].read(tag)
-
-###############################################################################       
-       
-       
 ###############################################################################
 """
 Represents a line in a cache, whether is a direct-mapped cache(n_blocks_pl=0)
@@ -106,11 +74,7 @@ or a n-way associative cache(n_blocks_pl=n)
 
 The blocks include the tag and MESI bits
 """
-class Line:
-    def __init__(self, n_blocks_pl):     
-        self.blocks = []
-        for n in range(n_blocks_pl):
-            self.blocks += [Block()]
+
 ###############################################################################
             
 
@@ -123,7 +87,7 @@ Represents a block and the associated MESI bits and tag
     +------+-------+----------+
     
 """
-class Block:
+class BlockMESI:
     def __init__(self):
         self.MESI = {'M':0, 'E':0, 'S':0, 'I':1}
         self.tag = ""
@@ -137,7 +101,114 @@ class Block:
         
     def set_state(self, state_key, state_value):
         self.MESI[state_key] = state_value
-###############################################################################      
+
+
+
+       
+    
+###############################################################################  
+    
+    
+
+
+
+
+###############################################################################
+"""
+Represents cache Level 2
+    
+    +------------+
+    |    Set0    |
+    +------------+
+    |    Set1    |
+    +------------+
+    |    ...     |
+    +------------+
+
+"""
+
+class CacheL2:
+    def __init__(self, n_lines, caches):
+        self.caches = caches        
+        self.n_lines = n_lines      
+        self.lines = []
+        for n in range(n_lines):
+            self.lines += [Line()]
+
+    def read_addr(self, address):
+        index = address/2^12
+        tag = (address%2^12)/2^5
+        offset = address%2^5
+        if self.lines[index].read(tag):
+            # hit
+            print "READ HIT on L2, address {0}".format(address)
+            self.lines[index].update_CVb(, 1)
+            return [True, self.lines[index].get_CVb()]
+        else:   
+            # miss
+            print "READ MISS on L2, bringing {0} \
+                address from main memory".format(address)
+            # now L2 evicts a line, so invalidate snooping is called
+            self.snoop_invalidate(address)
+            self.lines[index].set_tag(tag)
+            self.lines[index].set_CVb([0,0])
+            return [False, self.lines[index].get_CVb()]
+            
+    def snoop_invalidate(self, address):
+        """
+        Invalidates a given address on all local caches
+        """
+        for ch in self.caches:
+            ch.invalidate(address)
+        
+    def write_addr(self, address):
+        index = address/2^12
+        tag = (address%2^12)/2^5
+        offset = address%2^5
+        self.lines[index].write(tag)
+
+
+class Line:
+    def __init__(self):     
+        
+        self.block = Block()
+            
+    def read(self, tag):
+        return self.block.read(tag)
+        
+    def write(self, ):
+        self.block.write(tag)
+        
+        
+        
+class Block:
+    def __init__(self):
+        self.tag = ""
+        self.data = "" # dummy variable
+        self.CVb = [0,0]
+        
+    def read(self, tag):
+        if tag==self.tag:
+            return True
+        else:
+            return False
+        
+    def set_tag(self, tag):
+        self.tag = tag
+    
+    def get_tag(self):
+        return self.tag
+        
+    def set_CVb(self, new_cvb):
+        self.CVb = new_cvb[:]
+    
+    def update_CVb(self, n, value):
+        self.CVb[n] = value
+    def get_CVb(self):
+        return self.CVb 
+###############################################################################       
+       
+           
     
 
 ###############################################################################      
@@ -147,7 +218,7 @@ class CpuMaster:
         # create caches
         self.ch_local_cpu1 = CacheL1(256, 2)
         self.ch_local_cpu2 = CacheL1(256, 2)
-        self.ch_shared_cpu = CacheL2(4*1024, 1)
+        self.ch_shared_cpu = CacheL2(4*1024, [self.ch_local_cpu1, self.ch_local_cpu2])
     
     def simulate(self, program_core1, program_core2):
         print "Processing program {0} in core 1".format(program_core1)
