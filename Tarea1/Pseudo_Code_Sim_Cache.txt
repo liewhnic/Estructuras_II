@@ -1,0 +1,139 @@
+#########################################################################
+Read operation flux
+
+find value in cache L1
+
+if present L1:
+	if I:
+		miss L1!!!
+		# this steps are actually the same if value is not present in L1
+		
+	elif E:
+		hit L1!!!
+		remain in state E
+		
+	elif M:
+		hit L1!!!
+		remain in state M
+			
+	elif S:
+		hit L1!!!
+		remain in state S
+
+
+if not present in L1:
+	miss L1!!!
+	find value in cache L2
+	if present in L2:
+		hit L2!!!
+		bring value from L2 to L1
+		delete procedure L1()
+		if value is in other L1: # check CVb for presence in other cores
+			if state in LL1 is 
+				M:
+					write-back LL1 value to L2 then L1 fetchs this value
+					set LL1 to I, update CVbs to zero
+					set L1 to E
+					update CVbs
+				
+				S:
+					# this case it is not posible since there are just two cores
+					set L1 to S
+					update CVbs
+					
+				E:
+					set LL1 to S
+					set L1 to S
+					update CVbs
+		if not:
+			set E for the new value
+			update CVbs # set the corresponding bit of the requesting core
+		
+	if not in L2:
+		miss L2!!!
+		bring value from memory to L2 and L1
+		delete procedure L1()
+		delete procedure L2()
+		
+		set CVbs # just in the requested core
+		
+		set E for the new value
+
+
+
+#########################################################################
+Write operation flux
+
+find value in cache L1
+
+if present in L1:
+	if I:
+		miss L1!!!
+		# same steps when value is not present in L1
+		
+	elif E:
+		hit L1!!!
+		set state M
+		
+	elif M:
+		hit L1!!!
+		set state M
+		
+	elif S:
+		hit L1!!!
+		set state M
+		invalidate other core entries
+		update CVbs # clear the invalidated entries
+
+if not present in L1:
+	miss L1!!!
+	find value in cache L2
+	
+	if present in L2:
+		hit L2!!!
+		bring value from L2 to L1
+		delete procedure L1()
+		if value is in other L1: # check CVb for other cores
+			set M for the new value
+			set I for the other values
+			update CVbs # clear the invalidated entries
+		if not:
+			set M for the new value
+			update CVbs # set the corresponding bit of the requesting core and 
+		
+	if not in L2:
+		missL2!!!
+		bring value from memory to L2 and L1
+		delete procedure L1()
+		delete procedure L2()
+		
+		set CVbs # just in the requested core
+		
+		set M for the new value
+
+
+#########################################################################
+delete procedure L1()
+
+if state is
+
+I:
+	do nothing
+	
+E or S:
+	update CVb in L2
+	
+M:	
+	write-back to L2, unset CVb
+
+#########################################################################
+delete procedure L2()
+
+if valid bit:
+	if CVbs
+		delete procedure LL1 or L1 ()
+	write-back to memory
+else:
+	do nothin
+	
+
