@@ -26,8 +26,9 @@ if not present in L1:
 	find value in cache L2
 	if present in L2:
 		hit L2!!!
-		bring value from L2 to L1
+		
 		delete procedure L1()
+		bring value from L2 to L1
 		if value is in other L1: # check CVb for presence in other cores
 			if state in LL1 is 
 				M:
@@ -51,9 +52,9 @@ if not present in L1:
 		
 	if not in L2:
 		miss L2!!!
-		bring value from memory to L2 and L1
 		delete procedure L1()
 		delete procedure L2()
+		bring value from memory to L2 and L1
 		
 		set CVbs # just in the requested core
 		
@@ -91,21 +92,25 @@ if not present in L1:
 	
 	if present in L2:
 		hit L2!!!
-		bring value from L2 to L1
+		
 		delete procedure L1()
+		bring value from L2 to L1
+		
 		if value is in other L1: # check CVb for other cores
 			set M for the new value
 			set I for the other values
 			update CVbs # clear the invalidated entries
+			
 		if not:
 			set M for the new value
 			update CVbs # set the corresponding bit of the requesting core and 
 		
 	if not in L2:
 		missL2!!!
-		bring value from memory to L2 and L1
 		delete procedure L1()
 		delete procedure L2()
+		bring value from memory to L2 and L1
+		
 		
 		set CVbs # just in the requested core
 		
@@ -115,7 +120,7 @@ if not present in L1:
 #########################################################################
 delete procedure L1()
 
-if state is
+if previous value state is
 
 I:
 	do nothing
@@ -134,6 +139,6 @@ if valid bit:
 		delete procedure LL1 or L1 ()
 	write-back to memory
 else:
-	do nothin
+	do nothing
 	
 
