@@ -11,37 +11,44 @@ default_programcpu2 = "mem_trace_core2.txt"
 Represents cache Level 1
     
     +-----------+
-    |   Line0   |
+    |   Set0    |
     +-----------+
-    |   Line1   |
+    |   Set1    |
     +-----------+
     |   ...     |
     +-----------+
 
 """
 class CacheL1:
-    def __init__(self, n_lines, n_blocks_pl):
-        self.n_lines = n_lines
+    def __init__(self, n_sets, n_blocks_pl):
+        self.n_sets = n_sets
         self.n_blocks_pl = n_blocks_pl        
-        self.lines = []
-        for n in range(n_lines):
-            self.lines += [LineLru(n_blocks_pl)]
+        self.sets = []
+        for n in range(n_sets):
+            self.sets += [SetLru(n_blocks_pl)]
 
     def read_addr(self, address):
         index = address/2^16
         tag = (address%2^16)/2^5
         offset = address%2^5
-        self.lines[index].read(tag)
+        return self.sets[index].read(tag)
 
     def write_addr(self, address):
         index = address/2^16
         tag = (address%2^16)/2^5
         offset = address%2^5
-        self.lines[index].read(tag)
+        return self.sets[index].write(tag)
         
-     def invalidate(self, address):
+    def invalidate(self, address):
          None
          # TODO!!!
+         
+    def delete_block(self, address):
+        index = address/2^16
+        tag = (address%2^16)/2^5
+        offset = address%2^5
+        self.sets[index].update(tag) 
+    
          
 ###############################################################################
 
@@ -55,28 +62,40 @@ or a n-way associative cache(n_blocks_pl=n)
     +----------+--------------+--------------+-----+
     
 """
-class LineLru:
+class SetLru:
     def __init__(self, n_blocks_pl):     
-        self.n_lrubits=math.ceil(math.log(n_blocks_pl,2))     
+        #self.n_lrubits=math.ceil(math.log(n_blocks_pl,2))    
+        self.lrubit = 0
         self.blocks = []
         for n in range(n_blocks_pl):
-            self.blocks += [Block()]
-###############################################################################
-
-
-###############################################################################
-"""
-Represents a line in a cache, whether is a direct-mapped cache(n_blocks_pl=0)
-or a n-way associative cache(n_blocks_pl=n)
-    +--------------+--------------+-----+ 
-    |    Block0    |    Block1    | ... |
-    +--------------+--------------+-----+
-
-The blocks include the tag and MESI bits
-"""
-
-###############################################################################
+            self.blocks += [BlockMESI()]
             
+    def read(self, tag):
+        n = 0
+        for bl in self.blocks:
+            n += 1
+            if bl.get_tag == tag and bl.get_state != "I":
+                # value present in L1
+                self.lrubit = n
+                return bl.get_state
+                
+        # value not present in L1                
+        return "I"
+
+    def write(self, tag):
+        None
+        
+    def update(self, tag):
+        prev_state = self.blocks[self.lrubit].get_state()
+        if prev_state == "I":
+            # do nothing
+        
+        self.blocks[self.lrubit].set_tag(tag)
+        
+        
+###############################################################################
+
+
 
 
 ###############################################################################
@@ -89,18 +108,21 @@ Represents a block and the associated MESI bits and tag
 """
 class BlockMESI:
     def __init__(self):
-        self.MESI = {'M':0, 'E':0, 'S':0, 'I':1}
+        self.MESI = "I"
         self.tag = ""
         self.data = "" # dummy variable
+    
+    def get_tag(self):
+        return self.tag
         
     def set_tag(self, tag):
         self.tag = tag
     
-    def get_state(self, state_key):
-        return self.MESI[state_key]
+    def get_state(self):
+        return self.MESI
         
-    def set_state(self, state_key, state_value):
-        self.MESI[state_key] = state_value
+    def set_state(self, state_value):
+        self.MESI = state_value
 
 
 
@@ -128,31 +150,32 @@ Represents cache Level 2
 """
 
 class CacheL2:
-    def __init__(self, n_lines, caches):
+    def __init__(self, n_sets, caches):
         self.caches = caches        
-        self.n_lines = n_lines      
-        self.lines = []
-        for n in range(n_lines):
-            self.lines += [Line()]
+        self.n_sets = n_sets     
+        self.sets = []
+        for n in range(n_sets):
+            self.Sets += [Set()]
 
     def read_addr(self, address):
         index = address/2^12
         tag = (address%2^12)/2^5
         offset = address%2^5
-        if self.lines[index].read(tag):
+        if self.sets[index].read(tag):
             # hit
             print "READ HIT on L2, address {0}".format(address)
-            self.lines[index].update_CVb(, 1)
-            return [True, self.lines[index].get_CVb()]
+            self.sets[index].update_CVb(, 1)
+            return [True, self.sets[index].get_CVb()]
+            
         else:   
             # miss
             print "READ MISS on L2, bringing {0} \
                 address from main memory".format(address)
             # now L2 evicts a line, so invalidate snooping is called
             self.snoop_invalidate(address)
-            self.lines[index].set_tag(tag)
-            self.lines[index].set_CVb([0,0])
-            return [False, self.lines[index].get_CVb()]
+            self.sets[index].set_tag(tag)
+            self.sets[index].set_CVb([0,0])
+            return [False, self.sets[index].get_CVb()]
             
     def snoop_invalidate(self, address):
         """
@@ -168,30 +191,26 @@ class CacheL2:
         self.lines[index].write(tag)
 
 
-class Line:
-    def __init__(self):     
-        
-        self.block = Block()
-            
-    def read(self, tag):
-        return self.block.read(tag)
-        
-    def write(self, ):
-        self.block.write(tag)
         
         
-        
-class Block:
+class Set:
     def __init__(self):
         self.tag = ""
+        self.valid_bit = 0
         self.data = "" # dummy variable
         self.CVb = [0,0]
         
+    def is_valid(self):
+        return self.valid_bit
+        
     def read(self, tag):
-        if tag==self.tag:
+        if tag==self.tag and self.is_valid():
             return True
         else:
             return False
+    
+    def write(self,):
+        
         
     def set_tag(self, tag):
         self.tag = tag
@@ -204,12 +223,32 @@ class Block:
     
     def update_CVb(self, n, value):
         self.CVb[n] = value
+        
     def get_CVb(self):
         return self.CVb 
+
+    def set_attr(self, valid_b, cvbs, tag):
+        self.valid_bit = valid_b        
+        self.CVb = cvbs
+        self.tag = tag
+        
 ###############################################################################       
        
            
-    
+    ###############################################################################
+"""
+Represents a line in a cache, whether is a direct-mapped cache(n_blocks_pl=0)
+or a n-way associative cache(n_blocks_pl=n)
+    +--------------+--------------+-----+ 
+    |    Block0    |    Block1    | ... |
+    +--------------+--------------+-----+
+
+The blocks include the tag and MESI bits
+"""
+
+###############################################################################
+            
+
 
 ###############################################################################      
 
@@ -240,7 +279,7 @@ class CpuMaster:
                     address1 = int(cpu1_instr[0])
                     mode1 = cpu1_instr[1]
                     self.execute_cpu1(address1, mode1)
-            
+                            
             cpu2_line = cpu2_file.readline()
             if cpu2_line:
                 # process instruction in cpu2
@@ -253,27 +292,83 @@ class CpuMaster:
         # try L1
         hit_L1 = False
         if mode == 'L':
-            hit_L1 = self.ch_local_cpu1.read(address)
+            print "CPU1: Read address {0}".format(address)
+            stateL1 = self.ch_local_cpu1.read(address)
+            
+            if stateL1 in "EMS":
+                hit_L1 = True
+            
+            if hit_L1:                
+                    print "CPU1: Read HIT L1, address {0}".format(address)
+                    # remain in previous state, finish execution
+                    return
+                    
+            else:
+                    print "CPU1: Read MISS L1, address {0}".format(address)
+                
         elif mode == 'S':
+            print "Write to address {0}".format(address)
             hit_L1 = self.ch_local_cpu1.write(address)
+            
             # check pending invalidation messages
             # TODO check an execute invalidation messages!!!!
             addr2inv = self.ch_local_cpu1.get_invalidation()
             if addr2inv:
                 self.ch_local_cpu2.invalidate(addr2inv)
-        else:
-            print "Invalid action L/S"
         
+        else:
+            print "Invalid action {0}".format(mode)
+        
+        # data not present in L1
         if not hit_L1:
+            self.delete_procL1(address)         
+            
             # try L2
             hit_L2 = False
             if mode == 'L':
                 hit_L2 = self.ch_shared_cpu.read(address)
+                
+                if hit_L2:
+                    print "CPU1: Read HIT L2, address {0}".format(address)
+                                      
+                    # check for other L1 copy
+                    mode_copy_cpu2 = self.ch_local_cpu2.read(address)
+                    
+                    if mode_copy_cpu2 == "M":
+                        print "Found modified entry in CPU2, address {0}".format(address)
+                        print "CPU2: Write back to L2, address {0}".format(address)
+                        self.ch_local_cpu2.set_mode(address, "I")
+                        self.ch_local_cpu1.update_set(address, "E")                        
+                        self.ch_shared_cpu.set_CVb(address, [1, 0])
+                        
+                    elif mode_copy_cpu2 == "S":
+                        self.ch_local_cpu1.update_set(address, "S")                        
+                        self.ch_shared_cpu.set_CVb(address, [1, 1])
+                        
+                                            
+                    elif mode_copy_cpu2 == "E":
+                        self.ch_local_cpu2.set_mode(address, "S")
+                        self.ch_local_cpu1.update_set(address, "S")                        
+                        self.ch_shared_cpu.set_CVb(address, [1, 1])
+                        
+                    else:
+                        self.ch_local_cpu1.update_set(address, "E")                        
+                        self.ch_shared_cpu.set_CVb(address, [1, 0])
+                        
+                else:
+                    print "CPU1: Read MISS L2, address {0}".format(address)
+                    self.delete_procL2(address)
+                    self.ch_local_cpu1.update_set(address, "E")
+                    self.ch_shared_cpu.update_set(address)                        
+                    self.ch_shared_cpu.set_CVb(address, [1, 0])
+                                        
             elif mode == 'S':
+
                 hit_L2 = self.ch_shared_cpu.write(address)
+
             else:
-                print "Invalid action L/S"
-            
+                print "Invalid action {0}".format(mode)
+        
     def execute_cpu2(self, address, mode):
         # try L1
         hit_L1 = False
@@ -298,7 +393,16 @@ class CpuMaster:
                 hit_L2 = self.ch_shared_cpu.write(address)
             else:
                 print "Invalid action L/S"             
-            
+                
+    def delete_procL1(self, address):
+        self.ch_local_cpu1.delete_block(address)
+        
+    def delete_procLL1(self, address):
+        self.ch_local_cpu2.delete_block(address)
+        
+    def delete_procL2(self, address):
+        self.ch_shared_cpu.delete_block(address)
+        
 ###############################################################################
 def main():
      # Obtaining parameters from cli

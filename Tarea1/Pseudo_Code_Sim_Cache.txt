@@ -23,11 +23,12 @@ if present L1:
 
 if not present in L1:
 	miss L1!!!
+	delete procedure L1()
+	
 	find value in cache L2
 	if present in L2:
 		hit L2!!!
 		
-		delete procedure L1()
 		bring value from L2 to L1
 		if value is in other L1: # check CVb for presence in other cores
 			if state in LL1 is 
@@ -52,7 +53,6 @@ if not present in L1:
 		
 	if not in L2:
 		miss L2!!!
-		delete procedure L1()
 		delete procedure L2()
 		bring value from memory to L2 and L1
 		
