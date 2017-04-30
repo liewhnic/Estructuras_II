@@ -125,7 +125,7 @@ class SetLru:
             n += 1
 
         # value not present in L1
-        return ""
+        return "N"
 
     def update_set(self, tag, state):
         block_idx = self.lrubits.index(1)
@@ -206,14 +206,14 @@ Represents a block and the associated MESI bits and tag
 class BlockMESI:
     def __init__(self):
         self.MESI = "I"
-        self.tag = ""
-        self.data = ""  # dummy variable
+        self.tag = 0
+        self.data = 0  # dummy variable
 
     def read(self, tag):
         if self.tag == tag:
             return self.MESI
         else:
-            return ""
+            return "N"
 
     def get_tag(self):
         return self.tag
@@ -383,7 +383,7 @@ class CpuMaster:
         address = self.ch_local_cpu1.get_similar(address)
         mode_L1 = self.ch_local_cpu1.read(address)
 
-        if mode_L1 in "ESI":
+        if mode_L1 in "ESIN":
             None  # No action required
 
         elif mode_L1 == "M":
@@ -398,7 +398,7 @@ class CpuMaster:
         address = self.ch_local_cpu2.get_similar(address)
         mode_LL1 = self.ch_local_cpu2.read(address)
 
-        if mode_LL1 in "ESI":
+        if mode_LL1 in "ESIN":
             None  # No action required
 
         elif mode_LL1 == "M":
@@ -416,7 +416,7 @@ class CpuMaster:
         # get state
         mode_L2 = self.ch_shared_cpu.read(address)
 
-        if mode_L2 in "EI":
+        if mode_L2 in "EIN":
             None  # No action required
 
         elif mode_L2 == "M":
