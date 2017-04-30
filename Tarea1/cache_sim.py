@@ -1,10 +1,29 @@
 #! /usr/bin/python2.7
 import argparse
+import csv
 
 # default files used for simulation
 default_programcpu1 = "mem_trace_core1.txt"
 default_programcpu2 = "mem_trace_core2.txt"
 
+
+###############################################################################
+# CSV data logger
+filename_csv = 'misses_dat.csv'
+
+
+class CSVLog:
+
+    def __init__(self):
+        with open(filename_csv, 'w') as csvfile:
+            self.fieldnames = ['Cycle CPU1', 'Cycle CPU2', 'Misses L1 CPU1', 'Misses L1 CPU2', 'Misses L2']
+            self.writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
+            self.writer.writeheader()
+
+    def write(self, cyclecpu1, cyclecpu2, missesL1, missesLL1, missesL2):
+        with open(filename_csv, 'a') as csvfile:
+            self.writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
+            self.writer.writerow({'Cycle CPU1': cyclecpu1, 'Cycle CPU2': cyclecpu2, 'Misses L1 CPU1': missesL1, 'Misses L1 CPU2': missesLL1, 'Misses L2': missesL2})
 
 ###############################################################################
 # Functions for addresses manipulation
@@ -238,6 +257,11 @@ class CpuMaster:
         self.ch_local_cpu1 = CacheL1(256, 2)
         self.ch_local_cpu2 = CacheL1(256, 2)
         self.ch_shared_cpu = CacheL2(4*1024, [self.ch_local_cpu1, self.ch_local_cpu2])
+        self.missesL1 = 0
+        self.missesLL1 = 0
+        self.missesL2 = 0
+        self.cyclecpu1 = 0
+        self.cyclecpu2 = 0
 
     def simulate(self, program_core1, program_core2):
         print "Processing program {0} in core 1".format(program_core1)
@@ -249,6 +273,15 @@ class CpuMaster:
         cpu1_line = "x"
         cpu2_line = "x"
 
+        # miss counters
+        self.missesL1 = 0
+        self.missesLL1 = 0
+        self.missesL2 = 0
+        self.cyclecpu1 = 0
+        self.cyclecpu2 = 0
+
+        log_misses = CSVLog()
+
         # begin simulation
         while cpu1_line or cpu2_line:
             for n in range(3):
@@ -259,6 +292,8 @@ class CpuMaster:
                     address1 = int(cpu1_instr[0], 16)
                     mode1 = cpu1_instr[1]
                     self.execute_cpu1(address1, mode1)
+                    log_misses.write(self.cyclecpu1, self.cyclecpu2, self.missesL1, self.missesLL1, self.missesL2)
+                    self.cyclecpu1 += 1
 
             cpu2_line = cpu2_file.readline()
             if cpu2_line:
@@ -267,6 +302,8 @@ class CpuMaster:
                 address2 = int(cpu2_instr[0], 16)
                 mode2 = cpu2_instr[1]
                 self.execute_cpu2(address2, mode2)
+                log_misses.write(self.cyclecpu1, self.cyclecpu2, self.missesL1, self.missesLL1, self.missesL2)
+                self.cyclecpu2 += 1
 
     def execute_cpu1(self, address, mode):
         self.execute_cpu(address=address, mode=mode, local_cache=self.ch_local_cpu1, local_cache_name="CPU1",
@@ -302,6 +339,11 @@ class CpuMaster:
 
             else:
                     print "{0}: Read MISS L1, address {1}".format(local_cache_name, address)
+                    if local_cache_name == "CPU1":
+                        self.missesL1 += 1
+                    elif local_cache_name == "CPU2":
+                        self.missesLL1 += 1
+
                     # next step is to check in L2
 
                     self.delete_procL1(address)
@@ -333,6 +375,7 @@ class CpuMaster:
                             self.ch_shared_cpu.set_state(address, "S")
 
                     else:
+                        self.missesL2 += 1
                         print "{0}: Read MISS L2, address {0}, must read from memory".format(local_cache_name, address)
                         self.delete_procL2(address)
                         local_cache.update_set(address, "E")
@@ -355,6 +398,10 @@ class CpuMaster:
                 return
 
             else:
+                if local_cache_name == "CPU1":
+                    self.missesL1 += 1
+                elif local_cache_name == "CPU2":
+                    self.missesLL1 += 1
                 print "{0}: Write MISS L1, address {1}".format(local_cache_name, address)
                 self.delete_procL1(address)
 
@@ -371,6 +418,7 @@ class CpuMaster:
                         local_cache.update_set(address, "M")
                         self.ch_shared_cpu.set_state(address, "S")
                 else:
+                    self.missesL2 += 1
                     print "{0}: Write MISS L2, address {1}".format(local_cache_name, address)
                     self.delete_procL2(address)
                     local_cache.update_set(address, "M")
