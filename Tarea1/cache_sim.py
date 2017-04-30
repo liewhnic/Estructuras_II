@@ -126,21 +126,21 @@ class SetLru:
         # tries to find valid blocks
         n = 0
         for bl in self.blocks:
-            if bl.get_tag == tag and bl.get_state != "I":
+            if bl.get_tag() == tag and bl.get_state() != "I":
                 # value present in L1
+                self.lrubits = [1]*self.n_blocks
                 self.lrubits[n] = 0
-                return bl.get_state
-            self.lrubits[n] = 1
+                return bl.get_state()
             n += 1
 
         # if there are no valid blocks, search for invalid blocks
         n = 0
         for bl in self.blocks:
-            if bl.get_tag == tag:
+            if bl.get_tag() == tag:
                 # value present in L1
+                self.lrubits = [1] * self.n_blocks
                 self.lrubits[n] = 0
-                return bl.get_state
-            self.lrubits[n] = 1
+                return bl.get_state()
             n += 1
 
         # value not present in L1
@@ -317,6 +317,7 @@ class CpuMaster:
         hit_L2 = False
         # try L1
         state_L1 = local_cache.read(address)
+
         if state_L1 in "EMS":
             hit_L1 = True
         else:
