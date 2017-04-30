@@ -20,12 +20,12 @@ Represents cache Level 1
 
 """
 class CacheL1:
-    def __init__(self, n_sets, n_blocks_pl):
+    def __init__(self, n_sets, n_blocks_ps):
         self.n_sets = n_sets
-        self.n_blocks_pl = n_blocks_pl
+        self.n_blocks_ps = n_blocks_ps
         self.sets = []
         for n in range(n_sets):
-            self.sets += [SetLru(n_blocks_pl)]
+            self.sets += [SetLru(n_blocks_ps)]
 
     def read_addr(self, address):
         index = address/2^16
@@ -57,19 +57,17 @@ class CacheL1:
 
 ###############################################################################
 """
-Represents a line in a cache, whether is a direct-mapped cache(n_blocks_pl=0)
-or a n-way associative cache(n_blocks_pl=n)
+Represents a set in a n-way associative cache(n_blocks_pl=n)
     +----------+--------------+--------------+-----+
     | LRU bits |    Block0    |    Block1    | ... |
     +----------+--------------+--------------+-----+
 
 """
 class SetLru:
-    def __init__(self, n_blocks_pl):
-        #self.n_lrubits=math.ceil(math.log(n_blocks_pl,2))
-        self.lrubit = 0
+    def __init__(self, n_blocks):
+        self.lrubit = 0  # indicates last recent used block
         self.blocks = []
-        for n in range(n_blocks_pl):
+        for n in range(n_blocks):
             self.blocks += [BlockMESI()]
 
     def read(self, tag):
@@ -101,45 +99,6 @@ class SetLru:
 ###############################################################################
 
 
-
-
-###############################################################################
-"""
-Represents a block and the associated MESI bits and tag
-    +------+-------+----------+
-    | MESI |  Tag  |   Data   |
-    +------+-------+----------+
-
-"""
-class BlockMESI:
-    def __init__(self):
-        self.MESI = "I"
-        self.tag = ""
-        self.data = "" # dummy variable
-
-    def get_tag(self):
-        return self.tag
-
-    def set_tag(self, tag):
-        self.tag = tag
-
-    def get_state(self):
-        return self.MESI
-
-    def set_state(self, state_value):
-        self.MESI = state_value
-
-
-
-
-
-###############################################################################
-
-
-
-
-
-
 ###############################################################################
 """
 Represents cache Level 2
@@ -160,7 +119,7 @@ class CacheL2:
         self.n_sets = n_sets
         self.sets = []
         for n in range(n_sets):
-            self.sets += [Set()]
+            self.sets += [BlockMESI()]
 
     def read_addr(self, address, cache_num):
         index = address/2^12
@@ -194,67 +153,35 @@ class CacheL2:
         tag = (address%2^12)/2^5
         offset = address%2^5
         self.lines[index].write(tag, cache_num)
+###############################################################################
 
 
-########################################
+###############################################################################
+"""
+Represents a block and the associated MESI bits and tag
+    +------+-------+----------+
+    | MESI |  Tag  |   Data   |
+    +------+-------+----------+
 
-class Set:
+"""
+class BlockMESI:
     def __init__(self):
+        self.MESI = "I"
         self.tag = ""
-        self.valid_bit = 0
         self.data = "" # dummy variable
-        self.CVb = [0,0]
-
-    def is_valid(self):
-        return self.valid_bit
-
-    def read(self, tag):
-        if tag==self.tag and self.is_valid():
-            return True
-        else:
-            return False
-
-    def write(self,tag, cache_num):
-        self.set_tag(tag)
-        self.valid_bit = 1
-        self.update_CVb(cache_num, 1)
-
-    def set_tag(self, tag):
-        self.tag = tag
 
     def get_tag(self):
         return self.tag
 
-    def set_CVb(self, new_cvb):
-        self.CVb = new_cvb[:]
-
-    def update_CVb(self, n, value):
-        self.CVb[n] = value
-
-    def get_CVb(self):
-        return self.CVb
-
-    def set_attr(self, valid_b, cvbs, tag):
-        self.valid_bit = valid_b
-        self.CVb = cvbs
+    def set_tag(self, tag):
         self.tag = tag
 
+    def get_state(self):
+        return self.MESI
+
+    def set_state(self, state_value):
+        self.MESI = state_value
 ###############################################################################
-
-
-    ###############################################################################
-"""
-Represents a line in a cache, whether is a direct-mapped cache(n_blocks_pl=0)
-or a n-way associative cache(n_blocks_pl=n)
-    +--------------+--------------+-----+
-    |    Block0    |    Block1    | ... |
-    +--------------+--------------+-----+
-
-The blocks include the tag and MESI bits
-"""
-
-###############################################################################
-
 
 
 ###############################################################################
@@ -296,14 +223,23 @@ class CpuMaster:
                 self.execute_cpu2(address2, mode2)
 
     def execute_cpu1(self, address, mode):
+
         # try L1
-        hit_L1 = False
+        state_L1 = self.ch_local_cpu1.read(address)
+        if state_L1 in "EMS":
+            hit_L1 = True
+        else:
+            hit_L1 = False
+            # if not in L1 then try L2
+            state_L2 = self.ch_shared_cpu.read(address)
+            if state_L2 in "EMS":
+                hit_L2 = True
+            else:
+                hit_L2 = False
+
+        # reading
         if mode == 'L':
             print "CPU1: Read address {0}".format(address)
-            stateL1 = self.ch_local_cpu1.read(address)
-
-            if stateL1 in "EMS":
-                hit_L1 = True
 
             if hit_L1:
                     print "CPU1: Read HIT L1, address {0}".format(address)
@@ -312,103 +248,137 @@ class CpuMaster:
 
             else:
                     print "CPU1: Read MISS L1, address {0}".format(address)
+                    # next step is to check in L2
 
-        elif mode == 'S':
-            print "Write to address {0}".format(address)
-            hit_L1 = self.ch_local_cpu1.write(address)
+                    self.delete_procL1(address)
 
-            # check pending invalidation messages
-            # TODO check an execute invalidation messages!!!!
-            addr2inv = self.ch_local_cpu1.get_invalidation()
-            if addr2inv:
-                self.ch_local_cpu2.invalidate(addr2inv)
+                    if hit_L2:
+                        print "CPU1: Read HIT L2, address {0}".format(address)
 
-        else:
-            print "Invalid action {0}".format(mode)
+                        # check for other L1 copy
+                        mode_copy_cpu2 = self.ch_local_cpu2.read(address)
 
-        # data not present in L1
-        if not hit_L1:
-            self.delete_procL1(address)
+                        if mode_copy_cpu2 == "M":
+                            print "Found modified entry in CPU2, address {0}".format(address)
+                            print "CPU2: Write back to L2, address {0}".format(address)
+                            self.ch_local_cpu2.set_mode(address, "I")
+                            self.ch_local_cpu1.update_set(address, "E")
+                            self.ch_shared_cpu.set_mode(address, "S")
 
-            # try L2
-            hit_L2 = False
-            if mode == 'L':
-                hit_L2 = self.ch_shared_cpu.read(address)
+                        elif mode_copy_cpu2 == "S":
+                            self.ch_local_cpu1.update_set(address, "S")
+                            self.ch_shared_cpu.set_mode(address, "S")
 
-                if hit_L2:
-                    print "CPU1: Read HIT L2, address {0}".format(address)
+                        elif mode_copy_cpu2 == "E":
+                            self.ch_local_cpu2.set_mode(address, "S")
+                            self.ch_local_cpu1.update_set(address, "S")
+                            self.ch_shared_cpu.set_mode(address, "S")
 
-                    # check for other L1 copy
-                    mode_copy_cpu2 = self.ch_local_cpu2.read(address)
-
-                    if mode_copy_cpu2 == "M":
-                        print "Found modified entry in CPU2, address {0}".format(address)
-                        print "CPU2: Write back to L2, address {0}".format(address)
-                        self.ch_local_cpu2.set_mode(address, "I")
-                        self.ch_local_cpu1.update_set(address, "E")
-                        self.ch_shared_cpu.set_CVb(address, [1, 0])
-
-                    elif mode_copy_cpu2 == "S":
-                        self.ch_local_cpu1.update_set(address, "S")
-                        self.ch_shared_cpu.set_CVb(address, [1, 1])
-
-
-                    elif mode_copy_cpu2 == "E":
-                        self.ch_local_cpu2.set_mode(address, "S")
-                        self.ch_local_cpu1.update_set(address, "S")
-                        self.ch_shared_cpu.set_CVb(address, [1, 1])
+                        else:
+                            self.ch_local_cpu1.update_set(address, "E")
+                            self.ch_shared_cpu.set_mode(address, "S")
 
                     else:
+                        print "CPU1: Read MISS L2, address {0}, must read from memory".format(address)
+                        self.delete_procL2(address)
                         self.ch_local_cpu1.update_set(address, "E")
-                        self.ch_shared_cpu.set_CVb(address, [1, 0])
+                        self.ch_shared_cpu.set_mode(address, "S")
 
-                else:
-                    print "CPU1: Read MISS L2, address {0}".format(address)
-                    self.delete_procL2(address)
-                    self.ch_local_cpu1.update_set(address, "E")
-                    self.ch_shared_cpu.update_set(address)
-                    self.ch_shared_cpu.set_CVb(address, [1, 0])
-
-            elif mode == 'S':
-
-                hit_L2 = self.ch_shared_cpu.write(address)
+        # writing
+        elif mode == 'S':
+            print "CPU1: Write to address {0}".format(address)
+            # TODO
+            if hit_L1:
+                if state_L1 in "EM":
+                    print "CPU1: Write HIT L1, address {0}".format(address)
+                    self.ch_local_cpu1.set_mode(address, "M")
+                elif state_L1 == "S":
+                    print "CPU1: Write HIT L1, address {0}".format(address)
+                    print "CPU1: But there is a copy in cpu2, invalidating cpu2 local cache block, address {0}".format(address)
+                    self.ch_local_cpu1.set_mode(address, "M")
+                    self.ch_local_cpu2.set_mode(address, "I")
+                return
 
             else:
-                print "Invalid action {0}".format(mode)
+                print "CPU1: Write MISS L1, address {0}".format(address)
+                self.delete_procL1(address)
+
+                if hit_L2:
+                    print "CPU1: Write HIT L2, address {0}".format(address)
+
+                    state_L1cpu2 = self.ch_local_cpu2.read(address)
+                    if state_L1cpu2 in "MES":
+                        print "CPU2: Invalidating copy, address {0}".format(address)
+                        self.ch_local_cpu1.update_set(address, "M")
+                        self.ch_local_cpu2.set_mode(address, "I")
+                        self.ch_shared_cpu.set_mode(address, "S")
+                    else:
+                        self.ch_local_cpu1.update_set(address, "M")
+                        self.ch_shared_cpu.set_mode(address, "S")
+                else:
+                    print "CPU1: Write MISS L2, address {0}".format(address)
+                    self.delete_procL2(address)
+                    self.ch_local_cpu1.update_set(address, "M")
+                    self.ch_shared_cpu.update_set(address, "S")
+
+
+        else:
+            print "Invalid action: {0}".format(mode)
 
     def execute_cpu2(self, address, mode):
-        # try L1
-        hit_L1 = False
-        if mode == 'L':
-            hit_L1 = self.ch_local_cpu2.read(address)
-        elif mode == 'S':
-            hit_L1 = self.ch_local_cpu2.write(address)
-            # check pending invalidation messages
-            # TODO check an execute invalidation messages!!!!
-            addr2inv = self.ch_local_cpu2.get_invalidation()
-            if addr2inv:
-                self.ch_local_cpu1.invalidate(addr2inv)
-        else:
-            print "Invalid action L/S"
-
-        if not hit_L1:
-            # try L2
-            hit_L2 = False
-            if mode == 'L':
-                hit_L2 = self.ch_shared_cpu.read(address)
-            elif mode == 'S':
-                hit_L2 = self.ch_shared_cpu.write(address)
-            else:
-                print "Invalid action L/S"
+        None
 
     def delete_procL1(self, address):
-        self.ch_local_cpu1.delete_block(address)
+        address = self.ch_local_cpu1.get_similar(address)
+        mode_L1 = self.ch_local_cpu1.read(address)
+
+        if mode_L1 in "ESI":
+            None # No action required
+
+        elif mode_L1 == "M":
+            print "Value to overwrite in L1 cpu1 is in M state, " \
+                  "write back to L2, address {0}".format(address)
+            self.ch_shared_cpu.set_mode(address, "M")
+
+        else:
+            print "Invalid mode in L1 cpu1: {0}".format(mode_L1)
 
     def delete_procLL1(self, address):
-        self.ch_local_cpu2.delete_block(address)
+        address = self.ch_local_cpu2.get_similar(address)
+        mode_LL1 = self.ch_local_cpu2.read(address)
+
+        if mode_LL1 in "ESI":
+            None  # No action required
+
+        elif mode_LL1 == "M":
+            print "Value to overwrite in L1 cpu2 is in M state, " \
+                  "write back to L2, address {0}".format(address)
+            self.ch_shared_cpu.set_mode(address, "M")
+
+        else:
+            print "Invalid mode in L1 cpu2: {0}".format(mode_LL1)
 
     def delete_procL2(self, address):
-        self.ch_shared_cpu.delete_block(address)
+
+        address = self.ch_shared_cpu.get_similar(address)
+
+        # get state
+        mode_L2 = self.ch_shared_cpu.read(address)
+
+        if mode_L2 in "EI":
+            None # No action required
+
+        elif mode_L2 == "M":
+            print "Value to overwrite in L2 is in M state, " \
+                  "write back to memory, address {0}".format(address)
+
+        elif mode_L2 == "S":
+            # invalidate L1 entries
+            self.ch_local_cpu1.set_mode(address, "I")
+            self.ch_local_cpu2.set_mode(address, "I")
+
+        else:
+            print "Invalid mode in L2: {0}".format(mode_L2)
 
 ###############################################################################
 def main():

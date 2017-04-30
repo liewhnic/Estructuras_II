@@ -78,7 +78,7 @@ if not present in L1:
 		delete procedure L2()
 		bring value from memory to L2 and L1
 		
-		set CVbs # just in the requested core
+		#set CVbs # just in the requested core
 		
 		set E for the L1 entry
 		and S for the L2 entry
@@ -170,7 +170,9 @@ M:
 	write back to memory
 
 S: 
-	snoop invalidate
+	snoop invalidate 
+
+	# not neccesary if delete procedure L1 is run always before delete procedure L2
 	if there is a M line in L1
 	then fetch value and write back to memory
 
