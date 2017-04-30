@@ -1,5 +1,23 @@
 #########################################################################
-Read operation flux
+MESI meanings
+
+L1:
+	E: unique clean copy in L1 local caches
+	M: modified, unique copy in L1 local caches, different from L2 copy
+	S: may be in other L1 local caches
+	I: invalid
+
+L2:
+	E: unique clean copy of memory in L2/L1 caches
+	M: modified and only copy in L2/L1 caches, gets this state from L1, different from memory value
+	S: there may be valid copies in L1 local caches (this includes E M S)
+	I: invalid
+	
+	In this case just MSI states are used
+
+	
+#########################################################################
+Read operation flow
 
 find value in cache L1
 
@@ -26,29 +44,33 @@ if not present in L1:
 	delete procedure L1()
 	
 	find value in cache L2
-	if present in L2:
+	if present in L2: # if state in L2 in EMS
 		hit L2!!!
 		
-		bring value from L2 to L1
-		if value is in other L1: # check CVb for presence in other cores
+		if value is in other L1: # if L2 state is S:
 			if state in LL1 is 
 				M:
 					write-back LL1 value to L2 then L1 fetchs this value
 					set LL1 to I, update CVbs to zero
 					set L1 to E
+					set L2 to S
 					update CVbs
 				
 				S:
-					# this case it is not posible since there are just two cores
+					remain LL1 in S
 					set L1 to S
+					set L2 to S
 					update CVbs
 					
 				E:
 					set LL1 to S
 					set L1 to S
+					set L2 to S
+					
 					update CVbs
 		if not:
-			set E for the new value
+			set E for the L1 entry
+			set S for the L2 entry
 			update CVbs # set the corresponding bit of the requesting core
 		
 	if not in L2:
@@ -58,12 +80,13 @@ if not present in L1:
 		
 		set CVbs # just in the requested core
 		
-		set E for the new value
+		set E for the L1 entry
+		and S for the L2 entry
 
 
 
 #########################################################################
-Write operation flux
+Write operation flow
 
 find value in cache L1
 
@@ -83,39 +106,40 @@ if present in L1:
 	elif S:
 		hit L1!!!
 		set state M
-		invalidate other core entries
+		invalidate other L1 core entries
 		update CVbs # clear the invalidated entries
 
 if not present in L1:
 	miss L1!!!
-	find value in cache L2
+	delete procedure L1()
 	
-	if present in L2:
+	find value in cache L2	
+	if present in L2: # if state in L2 in EMS
 		hit L2!!!
 		
-		delete procedure L1()
 		bring value from L2 to L1
 		
-		if value is in other L1: # check CVb for other cores
+		if value is in other L1: # check L2 S state
+			
 			set M for the new value
 			set I for the other values
+			set S for the L2 entry
 			update CVbs # clear the invalidated entries
 			
 		if not:
 			set M for the new value
+			set S for the L2 entry
 			update CVbs # set the corresponding bit of the requesting core and 
 		
 	if not in L2:
 		missL2!!!
-		delete procedure L1()
 		delete procedure L2()
 		bring value from memory to L2 and L1
 		
-		
 		set CVbs # just in the requested core
 		
-		set M for the new value
-
+		set M for the L1 entry
+		set S for the L2 entry
 
 #########################################################################
 delete procedure L1()
@@ -126,19 +150,29 @@ I:
 	do nothing
 	
 E or S:
-	update CVb in L2
+	do nothing, # if CVb are used, then update CVb in L2
 	
 M:	
-	write-back to L2, unset CVb
+	write-back to L2, set L2 state to M, unset CVb
 
 #########################################################################
 delete procedure L2()
 
-if valid bit:
-	if CVbs
-		delete procedure LL1 or L1 ()
-	write-back to memory
-else:
+if state to overwrite is:
+
+I: 
 	do nothing
-	
+
+E:
+	dummy state, not used
+
+M:
+	write back to memory
+
+S: 
+	snoop invalidate
+	if there is a M line in L1
+	then fetch value and write back to memory
+
+
 
