@@ -421,7 +421,9 @@ class CpuMaster:
                     self.execute_cpu1(address1, mode1)
                     log_misses.write(self.cyclecpu1, self.cyclecpu2, self.missesL1, self.missesLL1, self.missesL2)
                     self.cyclecpu1 += 1
-
+                else:
+                    print "{0}: There are no more lines to execute".format("CPU1")
+                    
             cpu2_line = cpu2_file.readline()
             if cpu2_line:
                 # process instruction in cpu2
@@ -431,7 +433,8 @@ class CpuMaster:
                 self.execute_cpu2(address2, mode2)
                 log_misses.write(self.cyclecpu1, self.cyclecpu2, self.missesL1, self.missesLL1, self.missesL2)
                 self.cyclecpu2 += 1
-
+            else:
+                print "{0}: There are no more lines to execute".format("CPU2")
     def execute_cpu1(self, address, mode):
         """
         Simulates read/write of address in cpu1.
@@ -532,7 +535,7 @@ class CpuMaster:
                         print "{0}: Read MISS L2, address {0}, must read from memory".format(local_cache_name, address)
                         self.delete_procL2(address)
                         local_cache.update_set(address, "E")
-                        self.ch_shared_cpu.set_state(address, "S")
+                        self.ch_shared_cpu.update_set(address, "S")
 
         # writing
         elif mode == 'S':
