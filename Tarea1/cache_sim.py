@@ -118,6 +118,15 @@ class CacheL1:
         [index, tag, offset] = get_fields(address, 5, 16)
         self.sets[index].set_state(tag, mode)
 
+    def get_state(self, address):
+        """
+        Get the state of the corresponding block
+        :param address: Int, memory address of block.
+        :return: State of the block, may be [MESI] or [N] for not present.
+        """
+        [index, tag, offset] = get_fields(address, 5, 16)
+        return self.sets[index].get_state(tag)
+
     def update_set(self, address, state):
         """
         Writes a tag and a corresponding state to L1 cache.
@@ -217,10 +226,18 @@ class SetLru:
         """
         n = 0
         for bl in self.blocks:
-            n += 1
-            if bl.get_tag == tag:
+
+            if bl.get_tag() == tag:
                 # value present in L1
                 self.blocks[n].set_state(tag, state)
+            n += 1
+    def get_state(self, tag):
+        """
+        Get the state for a block, with a given tag.
+        :param tag:
+        :return:
+        """
+        None
 
     def get_lrutag(self):
         """
@@ -423,7 +440,7 @@ class CpuMaster:
                     self.cyclecpu1 += 1
                 else:
                     print "{0}: There are no more lines to execute".format("CPU1")
-                    
+
             cpu2_line = cpu2_file.readline()
             if cpu2_line:
                 # process instruction in cpu2
@@ -505,11 +522,10 @@ class CpuMaster:
                     self.delete_procL1(address)
 
                     if hit_L2:
-                        print "CPU1: Read HIT L2, address {0}".format(address)
+                        print "{0}: Read HIT L2, address {1}".format(local_cache_name, address)
 
                         # check for other L1 copy
                         mode_copy_cpuext = extraneous_cache.read(address)
-
                         if mode_copy_cpuext == "M":
                             print "Found modified entry in {0}, address {1}".format(extraneous_cache_name, address)
                             print "{0}: Write back to L2, address {1}".format(extraneous_cache_name, address)
@@ -545,12 +561,13 @@ class CpuMaster:
                 if state_L1 in "EM":
                     print "{0}: Write HIT L1, address {1}".format(local_cache_name, address)
                     local_cache.set_state(address, "M")
+
                 elif state_L1 == "S":
                     print "{0}: Write HIT L1, address {1}".format(local_cache_name, address)
                     print "{0}: But there is a copy in {1}, invalidating {1} local cache block, address {2}"\
                         .format(local_cache_name, extraneous_cache_name, address)
-                    self.ch_local_cpu1.set_state(address, "M")
-                    self.ch_local_cpu2.set_state(address, "I")
+                    local_cache.set_state(address, "M")
+                    extraneous_cache.set_state(address, "I")
                 return
 
             else:
