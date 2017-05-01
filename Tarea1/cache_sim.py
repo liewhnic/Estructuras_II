@@ -118,15 +118,6 @@ class CacheL1:
         [index, tag, offset] = get_fields(address, 5, 16)
         self.sets[index].set_state(tag, mode)
 
-    def get_state(self, address):
-        """
-        Get the state of the corresponding block
-        :param address: Int, memory address of block.
-        :return: State of the block, may be [MESI] or [N] for not present.
-        """
-        [index, tag, offset] = get_fields(address, 5, 16)
-        return self.sets[index].get_state(tag)
-
     def update_set(self, address, state):
         """
         Writes a tag and a corresponding state to L1 cache.
@@ -231,13 +222,6 @@ class SetLru:
                 # value present in L1
                 self.blocks[n].set_state(tag, state)
             n += 1
-    def get_state(self, tag):
-        """
-        Get the state for a block, with a given tag.
-        :param tag:
-        :return:
-        """
-        None
 
     def get_lrutag(self):
         """
