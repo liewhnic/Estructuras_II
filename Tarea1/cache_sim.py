@@ -438,8 +438,6 @@ class CpuMaster:
                     self.execute_cpu1(address1, mode1)
                     log_misses.write(self.cyclecpu1, self.cyclecpu2, self.missesL1, self.missesLL1, self.missesL2)
                     self.cyclecpu1 += 1
-                else:
-                    print "{0}: There are no more lines to execute".format("CPU1")
 
             cpu2_line = cpu2_file.readline()
             if cpu2_line:
@@ -450,8 +448,7 @@ class CpuMaster:
                 self.execute_cpu2(address2, mode2)
                 log_misses.write(self.cyclecpu1, self.cyclecpu2, self.missesL1, self.missesLL1, self.missesL2)
                 self.cyclecpu2 += 1
-            else:
-                print "{0}: There are no more lines to execute".format("CPU2")
+
     def execute_cpu1(self, address, mode):
         """
         Simulates read/write of address in cpu1.
@@ -529,6 +526,7 @@ class CpuMaster:
                         if mode_copy_cpuext == "M":
                             print "Found modified entry in {0}, address {1}".format(extraneous_cache_name, address)
                             print "{0}: Write back to L2, address {1}".format(extraneous_cache_name, address)
+                            print "{0}: Read updated block from L2, address {1}".format(local_cache_name, address)
                             extraneous_cache.set_state(address, "I")
                             local_cache.update_set(address, "E")
                             self.ch_shared_cpu.set_state(address, "S")
